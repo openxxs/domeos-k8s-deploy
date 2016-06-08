@@ -1,15 +1,8 @@
 #!/bin/bash
 
-# install and start kubernetes master on centos 7 system
+# install and start kubernetes master on Ubuntu 12.04, 14.04, 15.10 and 16.04 system
 # xiaoshengxu@sohu-inc.com
-# http://domeos-script.bjctc.scs.sohucs.com/start_master_centos.sh
-
-# update 2016-04-21: add cluster DNS nameserver and search into top of resolv.conf; format output; fix some bugs; change install package url
-# update 2016-05-03: change install path from ${pwd} to "/usr/sbin/domeos/k8s/"; remove invalid log-dir parameter for Kubernetes
-# update 2016-05-06: remove hostname check
-# update 2016-05-23: chattr +i resolv.conf
-# update 2016-05-24: replace install package url; add kernel version and docker version check
-# update 2016-06-05: add kubernetes version setting; add flannel version setting, then seperate flanneld and mk-docker-opts.sh from domeos-k8s-master.tar.gz; master.tgz instead of domeos-k8s-master.tar.gz; add help info; remove kube-apiserver secure serve related parameters.
+# http://domeos-script.bjctc.scs.sohucs.com/start_master_ubuntu.sh
 
 AVAILABLE_K8S_VERSION=("1.1.3" "1.1.7" "1.2.0" "1.2.4")
 AVAILABLE_FLANNEL_VERSION=("0.5.5")
@@ -21,12 +14,13 @@ K8S_PACKAGE_URL_PREFIX="http://domeos-binpack.bjcnc.scs.sohucs.com/k8s/"
 FLANNEL_BIN_URL_PREFIX="http://domeos-binpack.bjcnc.scs.sohucs.com/flannel/"
 DOCKER_URL="https://get.docker.com/"
 RESOLV_FILE="/etc/resolv.conf"
+RESOLV_CONF_HEAD="/etc/resolvconf/resolv.conf.d/head"
 FLANNEL_PREFIX="/flannel/network"
 DOCKER_REGISTRY_CRT_PATH="/etc/docker/certs.d"
 DOCKER_OPTS="--log-level=warn"
 FLANNEL_OPTS=
 KUBE_APISERVER_OPTS=
-KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider=\"\""
+KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider="
 KUBE_SCHEDULER_OPTS=
 KUBE_PROXY_OPTS="--masquerade-all=true --proxy-mode=iptables"
 
@@ -39,11 +33,11 @@ function help ()
 {
   echo "
 Usage:
-  start_master_centos.sh [options]
-  start_master_centos.sh [command]
+  start_master_ubuntu.sh [options]
+  start_master_ubuntu.sh [command]
 
 Available Commands:
-  help    show the help information about start_master_centos.sh
+  help    show the help information about start_master_ubuntu.sh
 
 Options:
   --cluster-dns                 IP address of cluster DNS, should be in range of --service-cluster-ip-range (default 172.16.40.1).
@@ -69,19 +63,18 @@ echo "
             Welcome to install DomeOS Kubernetes Master!
                 Contact us: rdc-domeos@sohu-inc.com
 *************************************************************************
-This is a shell script for install, configure and start Kubernetes Master for DomeOS on CentOS 7. It will start flanneld, docker, kube-apiserver, kube-controller-manager, kube-scheduler and kube-proxy after successful execution.
+This is a shell script for install, configure and start Kubernetes Master for DomeOS on Ubuntu 12.04, 14.04, 15.10 and 16.04. It will start flanneld, docker, kube-apiserver, kube-controller-manager, kube-scheduler and kube-proxy after successful execution.
 
 Attention:
 1. This shell will try to install the latest docker if docker has not been installed. You can install docker by yourself before execute this shell. Docker version must be 1.8.2 at minimum, version 1.10.3 is recommanded.
 2. This shell will reset flannel and docker configure file.
-3. Use 'bash start_master_centos.sh help' to get more information.
 
 Usage Example:
 1. Simple options, use default values:
-sudo bash start_master_centos.sh --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --insecure-docker-registry 10.11.150.98:5000
+sudo bash start_master_ubuntu.sh --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --insecure-docker-registry 10.11.150.98:5000
 
 2. Full options:
-sudo bash start_master_centos.sh --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker --docker-registry-crt /opt/domeos/openxxs/k8s-1.1.7-flannel/registry.crt --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --flannel-network-ip-range 172.24.0.0/13 --flannel-subnet-len 22 --flannel-version 0.5.5 --insecure-bind-address 0.0.0.0 --insecure-port 8080 --insecure-docker-registry 10.11.150.78:5000 --kube-apiserver-port 8080 --kubernetes-version 1.2.0 --service-cluster-ip-range 172.16.0.0/13 --secure-docker-registry https://private-registry.sohucs.com
+sudo bash start_master_ubuntu.sh --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker --docker-registry-crt /opt/domeos/openxxs/k8s-1.1.7-flannel/registry.crt --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --flannel-network-ip-range 172.24.0.0/13 --flannel-subnet-len 22 --flannel-version 0.5.5 --insecure-bind-address 0.0.0.0 --insecure-port 8080 --insecure-docker-registry 10.11.150.78:5000 --kube-apiserver-port 8080 --kubernetes-version 1.2.0 --service-cluster-ip-range 172.16.0.0/13 --secure-docker-registry https://private-registry.sohucs.com
 "
 
 if [[ "$1" =~ "help" ]] || [ -z "$1" ]; then
@@ -90,20 +83,36 @@ if [[ "$1" =~ "help" ]] || [ -z "$1" ]; then
 fi
 
 # STEP 01: check linux kernel version
-echo -e "\033[36m[INFO] STEP 01: Check Linux kernel version...\033[0m"
+echo -e "\033[36m[INFO] STEP 01: Check system kernel...\033[0m"
 kernel_version=`uname -r`
-if [ -z $kernel_version ]; then
+if [ -z "$kernel_version" ]; then
   echo -e "\033[31m[ERROR] get kernel version error, kernel must be 3.10.0 at minimum\033[0m"
   exit 1
 fi
 kernel_parts_tmp=(${kernel_version//-/ })
 kernel_parts=(${kernel_parts_tmp[0]//./ })
-if [ ${kernel_parts[0]} -lt 3 ]; then
-  echo -e "\033[31m[ERROR] Kernel version must be 3.10.0 at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
-  exit 1
-fi
-if [ ${kernel_parts[0]} -eq 3 ] && [ ${kernel_parts[1]} -lt 10 ]; then
-  echo -e "\033[31m[ERROR] Kernel version must be 3.10.0 at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
+ubuntu_release=`lsb_release -a | grep "Release" | awk '{print $2}'`
+ubuntu_codename=`lsb_release -a | grep "Codename" | awk '{print $2}'`
+if [ "$ubuntu_release" == "12.04" ]; then
+  if [ ${kernel_parts[0]} -lt 3 ]; then
+    echo -e "\033[31m[ERROR] For Ubuntu Precise, Docker requires 3.13 kernel version at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
+    exit 1
+  fi
+  if [ ${kernel_parts[0]} -eq 3 ] && [ ${kernel_parts[1]} -lt 13 ]; then
+    echo -e "\033[31m[ERROR] For Ubuntu Precise, Docker requires 3.13 kernel version at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
+    exit 1
+  fi
+elif [ "$ubuntu_release" == "14.04" ]||[ "$ubuntu_release" == "15.10" ]||[ "$ubuntu_release" == "16.04" ]; then
+  if [ ${kernel_parts[0]} -lt 3 ]; then
+    echo -e "\033[31m[ERROR] For Ubuntu $ubuntu_codename, Docker requires 3.10 kernel version at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
+    exit 1
+  fi
+  if [ ${kernel_parts[0]} -eq 3 ] && [ ${kernel_parts[1]} -lt 10 ]; then
+    echo -e "\033[31m[ERROR] For Ubuntu $ubuntu_codename, Docker requires 3.10 kernel version at minimum, current version is ${kernel_parts_tmp[0]}\033[0m"
+    exit 1
+  fi
+else
+  echo -e "\033[31m[ERROR] This installation script only supports Ubuntu 12.04, 14.04, 15.10 and 16.04, current ubuntu version is $ubuntu_release, you need to install docker, flannel and kubernetes by yourself\033[0m"
   exit 1
 fi
 echo -e "\033[32m[OK] Check kernel OK, current kernel version is ${kernel_parts_tmp[0]}\033[0m"
@@ -113,7 +122,7 @@ echo -e "\033[36m[INFO] STEP 02: Check input arguments...\033[0m"
 OPTS=$(getopt -o : --long cluster-dns:,cluster-domain:,docker-graph-path:,docker-registry-crt:,etcd-servers:,flannel-network-ip-range:,flannel-subnet-len:,flannel-version:,insecure-bind-address:,insecure-port:,insecure-docker-registry:,kube-apiserver-port:,kubernetes-version:,service-cluster-ip-range:,secure-docker-registry: -- "$@")
 if [ $? != 0 ]
 then
-  echo -e "\033[31m[ERROR] start_master_centos.sh argument is illegal\033[0m"
+  echo -e "\033[31m[ERROR] start_master_ubuntu.sh argument is illegal\033[0m"
   exit 1
 fi
 eval set -- "$OPTS"
@@ -156,14 +165,7 @@ if [ -z "$cluster_dns" ]; then
   echo -e "\033[36m[INFO] --cluster-dns is absent, default '172.16.40.1'\033[0m"
   cluster_dns="172.16.40.1"
 else
-  cluster_dns_check=`echo $cluster_dns | grep ':' | wc | awk '{print $3}'`
-  if [ $cluster_dns_check -gt 0 ]; then
-    echo -e "\033[33m[WARN] --cluster-dns $cluster_dns includes port, it is illegal\033[0m"
-    cluster_dns=`echo $cluster_dns | cut -f1 -d ':'`
-    echo -e "\033[36m[INFO] use '--cluster-dns $cluster_dns' instead, DNS port always be 53\033[0m"
-  else
-    echo "--cluster-dns: $cluster_dns"
-  fi
+  echo "--cluster-dns: $cluster_dns"
 fi
 if [ -z "$cluster_domain" ]; then
   echo -e "\033[36m[INFO] --cluster-domain is absent, default 'domeos.local'\033[0m"
@@ -270,14 +272,14 @@ if [ -n "$secure_docker_registry" ]; then
     exit 1
   fi
 fi
-echo -e "\033[32m[OK] start_master_centos.sh arguments are legal\033[0m"
+echo -e "\033[32m[OK] start_master_ubuntu.sh arguments are legal\033[0m"
 
 # STEP 03: check host IP
 echo -e "\033[36m[INFO] STEP 03: Check host IP...\033[0m"
 host_hostname=`hostname`
 current_path=$(pwd)
 host_ips=(`ip addr show | grep inet | grep -v inet6 | grep brd | awk '{print $2}' | cut -f1 -d '/'`)
-if [ -z "$host_ips" ]; then
+if [ "$host_ips" == "" ]; then
   echo -e "\033[31m[ERROR] get host ip address error\033[0m"
   exit 1
 fi
@@ -298,7 +300,7 @@ do
     break
   fi
 done
-if [ -z "$host_ip" ]; then
+if [ "$host_ip" == "" ]; then
   host_ip=${host_ips[0]}
 fi
 echo -e "\033[32m[OK] use host IP address: $host_ip\033[0m"
@@ -345,8 +347,8 @@ else
   echo -e "\033[32m[OK] use flannel iface: $flannel_iface\033[0m"
 fi
 
-# STEP 06: add DNS server into resolv.conf 
-echo -e "\033[36m[INFO] STEP 06: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE\033[0m"
+# STEP 06: add DNS server into resolv.conf and resolv.conf.d/head
+echo -e "\033[36m[INFO] STEP 06: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE and $RESOLV_CONF_HEAD\033[0m"
 echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
 echo -e "\033[36mwaitting for 10 seconds...\033[0m"
 sleep 10
@@ -372,16 +374,42 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
   fi
 done < $RESOLV_FILE
 set -e
-chattr -i $RESOLV_FILE
 echo "search $cluster_dns_search" > $RESOLV_FILE
 echo "nameserver $cluster_dns" >> $RESOLV_FILE
 for i in "${host_self_dns[@]}"
 do
   echo $i >> $RESOLV_FILE
 done
-chattr +i $RESOLV_FILE
 set +e
-echo -e "\033[32m[OK] Add DNS nameserver and search into $RESOLV_FILE\033[0m"
+host_self_dns=
+host_self_dns_p=0
+while IFS='' read -r line || [[ -n "$line" ]]; do
+  name_tmp=$(echo $line | cut -f1 -d ' ')
+  value_tmp=$(echo $line | cut -f2- -d ' ')
+  if [ "$name_tmp" == "nameserver" ]; then
+    if [ "$cluster_dns" != "$value_tmp" ]; then
+      host_self_dns[$host_self_dns_p]="$line"
+      let host_self_dns_p++
+    fi
+  elif [ "$name_tmp" == "search" ]; then
+    if [ "$cluster_dns_search" != "$value_tmp" ]; then
+      host_self_dns[$host_self_dns_p]="$line"
+      let host_self_dns_p++
+    fi
+  else
+    host_self_dns[$host_self_dns_p]="$line"
+    let host_self_dns_p++
+  fi
+done < $RESOLV_CONF_HEAD
+set -e
+echo "search $cluster_dns_search" > $RESOLV_CONF_HEAD
+echo "nameserver $cluster_dns" >> $RESOLV_CONF_HEAD
+for i in "${host_self_dns[@]}"
+do
+  echo $i >> $RESOLV_CONF_HEAD
+done
+set +e
+echo -e "\033[32m[OK] Add DNS nameserver and search into $RESOLV_FILE and $RESOLV_CONF_HEAD\033[0m"
 
 # STEP 07: add hostname and IP address to /etc/hosts
 echo -e "\033[36m[INFO] STEP 07: Add hostname and IP address to /etc/hosts...\033[0m"
@@ -410,9 +438,16 @@ single_etcd_server=$(echo $etcd_servers | cut -f1 -d ',')
 curl -L $single_etcd_server/v2/keys$FLANNEL_PREFIX/config -XPUT -d value="${flannel_k8s_config}"
 if command_exists flanneld && [ -e /usr/libexec/flannel/mk-docker-opts.sh ]; then
   echo -e "\033[36m[INFO] flanneld command already exists on this system.\033[0m"
-  echo -e "\033[36m/etc/sysconfig/flanneld /usr/lib/systemd/system/docker.service.d/flannel.conf and /lib/systemd/system/flanneld.service files will be reset\033[0m"
-  echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  if command_exists systemctl ; then
+    echo -e "\033[36m/etc/sysconfig/flanneld, /usr/lib/systemd/system/docker.service.d/flannel.conf and /lib/systemd/system/flanneld.service files will be reset\033[0m"
+  elif command_exists initctl ; then
+    echo -e "\033[36m/etc/default/flanneld and /etc/init/flanneld.conf files will be reset\033[0m"
+  else
+    echo -e "\033[31m[ERROR] System should support systemctl(Systemd) or initctl(Upstart) if you want to add kubernetes node by start_master_ubuntu.sh.\033[0m"
+    exit 1
+  fi
+  echo -e "\033[36m[INFO]You may press Ctrl+C now to abort this script.\033[0m"
+  echo -e "\033[36m[INFO]waitting for 10 seconds...\033[0m"
   sleep 10
 fi
   # check http:// prefix of etcd address
@@ -434,14 +469,15 @@ do
     fi
   fi
 done
-echo "FLANNEL_ETCD=\"$flannel_etcd_servers\"
+if command_exists systemctl ; then
+  echo "FLANNEL_ETCD=\"$flannel_etcd_servers\"
 FLANNEL_ETCD_KEY=\"$FLANNEL_PREFIX\"
 FLANNEL_IFACE=\"$flannel_iface\"
 FLANNEL_OPTIONS=\"$FLANNEL_OPTS\"
 " > /etc/sysconfig/flanneld
-echo "[Service]
+  echo "[Service]
 EnvironmentFile=-/run/flannel/docker" > /usr/lib/systemd/system/docker.service.d/flannel.conf
-echo "[Unit]
+  echo "[Unit]
 Description=Flanneld overlay address etcd agent
 After=network.target
 After=network-online.target
@@ -461,6 +497,47 @@ Restart=always
 WantedBy=multi-user.target
 RequiredBy=docker.service
 " > /lib/systemd/system/flanneld.service
+elif command_exists initctl ; then
+  echo "FLANNEL_ETCD=\"$flannel_etcd_servers\"
+FLANNEL_ETCD_KEY=\"$FLANNEL_PREFIX\"
+FLANNEL_IFACE=\"$flannel_iface\"
+FLANNEL_OPTIONS=\"$FLANNEL_OPTS\"
+" > /etc/default/flanneld
+  echo "description \"Flannel service\"
+author \"@domeos\"
+
+start on (net-device-up
+  and local-filesystems
+  and runlevel [2345])
+stop on runlevel [016]
+
+respawn
+respawn limit 3 10
+pre-start script
+    FLANNEL=$FLANNEL_INSTALL_PATH/current/\$UPSTART_JOB
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    if [ -f \$FLANNEL ]; then
+        exit 0
+    fi
+exit 22
+end script
+
+script
+    # modify these in /etc/default/\$UPSTART_JOB (/etc/default/flanneld)
+    FLANNEL=$FLANNEL_INSTALL_PATH/current/\$UPSTART_JOB
+    FLANNEL_ETCD=\"\"
+    FLANNEL_ETCD_KEY=\"\"
+    FLANNEL_IFACE=\"\"
+    FLANNEL_OPTIONS=\"\"
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    exec \"\$FLANNEL\" -etcd-endpoints=\$FLANNEL_ETCD -etcd-prefix=\$FLANNEL_ETCD_KEY -iface=\$FLANNEL_IFACE \$FLANNEL_OPTIONS
+end script
+" > /etc/init/flanneld.conf
+fi
 if [ -e $FLANNEL_INSTALL_PATH/current/flanneld ] && [ -e /usr/libexec/flannel/mk-docker-opts.sh ]; then
   echo -e "\033[32m[OK] flannel environment is ready\033[0m"
 else
@@ -468,30 +545,77 @@ else
   exit 1
 fi
 
-# STEP 09: install and configure docker
+# STEP 09: install docker
 if command_exists docker; then
   echo -e "\033[36m[INFO] STEP 09: docker command alrealy exists on this system.\033[0m"
-  echo -e "\033[36m/etc/sysconfig/docker and /lib/systemd/system/docker.service files will be reset.\033[0m"
+  if command_exists systemctl ; then
+    echo -e "\033[36m/etc/sysconfig/docker and /lib/systemd/system/docker.service files will be reset.\033[0m"
+  elif command_exists initctl ; then
+    echo -e "\033[36m/etc/default/docker will be reset\033[0m"
+  fi
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
   echo -e "\033[36mwaitting for 10 seconds...\033[0m"
   sleep 10
+  docker_version=(`docker version | grep Version | awk '{print $2}'`)
+    if [ -z "$docker_version" ]; then
+    echo -e "\033[31m[ERROR] Get docker version error, your docker must be 1.8.2 at minimum\033[0m"
+    exit 1
+  fi
+  docker_version_invalid="false"
+  for i in ${docker_version[@]}; do
+    version_parts=(${i//./ })
+    if [ ${version_parts[0]} -lt 1 ]; then
+      docker_version_invalid="true"
+      break
+    fi
+    if [ ${version_parts[0]} -eq 1 ] && [ ${version_parts[1]} -lt 8 ]; then
+      docker_version_invalid="true"
+      break
+    fi
+    if [ ${version_parts[0]} -eq 1 ] && [ ${version_parts[1]} -eq 8 ] && [ ${version_parts[2]} -lt 2 ]; then
+      docker_version_invalid="true"
+      break
+    fi
+  done
+  if [ $docker_version_invalid == "true" ]; then
+    echo -e "\033[31m[ERROR] Docker server and client version must be 1.8.2 at minimum, current version is $i\033[0m"
+    exit 1
+  fi
 else
-  #yum install -y docker-engine-selinux-1.10.2-1.el7.centos.noarch.rpm
-  #yum install -y docker-engine-1.10.2-1.el7.centos.x86_64.rpm
   echo -e "\033[36m[INFO] STEP 09: Install and configure docker...\033[0m"
-  curl -sSL $DOCKER_URL | sh
+  docker_list_file="/etc/apt/sources.list.d/docker.list"
+  docker_repo_url="https://apt.dockerproject.org/repo"
+  apt-get update
+  apt-get install -y apt-transport-https ca-certificates
+  if [ "$ubuntu_release" == "14.04" ]||[ "$ubuntu_release" == "15.10" ]||[ "$ubuntu_release" == "16.04" ]; then
+    apt-get install -y linux-image-extra-$kernel_version
+  fi
+  if [ "$ubuntu_release" == "12.04" ]||[ "$ubuntu_release" == "14.04" ]; then
+    apt-get install -y apparmor
+  fi
+  apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+  if [ -f "$docker_list_file" ]; then
+    rm -f $docker_list_file
+  fi
+  touch $docker_list_file
+  echo "deb $docker_repo_url ubuntu-$ubuntu_codename main" > $docker_list_file
+  apt-get update
+  apt-get purge lxc-docker
+  apt-cache policy docker-engine
+  apt-get update
+  apt-get install -y docker-engine
+  set -e
+  docker_version=(`docker version | grep Version | awk '{print $2}'`)
+  set +e
+  echo -e "\033[32m[OK] Docker has been installed, version ${docker_version[0]}\033[0m"
 fi
-docker_opts="DOCKER_OPTS=\"$DOCKER_OPTS\""
-echo $docker_opts > /etc/sysconfig/docker
+
+# STEP 10: configure Docker
+echo -e "\033[36m[INFO] STEP 10: Configure docker...\033[0m"
 if [ -n "$insecure_docker_registry" ]; then
   insecure_docker_registry=$(echo $insecure_docker_registry | sed -e 's/https:\/\///g')
   insecure_docker_registry=$(echo $insecure_docker_registry | sed -e 's/http:\/\///g')
-  insecure_docker_registry="INSECURE_REGISTRY=\"--insecure-registry $insecure_docker_registry\""
-  echo $insecure_docker_registry >> /etc/sysconfig/docker
-fi
-if [ -n "$docker_graph_path" ]; then
-  docker_storage_options="DOCKER_STORAGE_OPTIONS=\"--graph $docker_graph_path\""
-  echo $docker_storage_options >> /etc/sysconfig/docker
+  insecure_docker_registry="--insecure-registry $insecure_docker_registry"
 fi
 if [ -n "$secure_docker_registry" ]; then
   secure_docker_registry=$(echo $secure_docker_registry | sed -e 's/https:\/\///g')
@@ -504,9 +628,14 @@ if [ -n "$secure_docker_registry" ]; then
     echo -e "\033[31m[ERROR] install docker secure registry certification failed\033[0m"
     exit 1
   fi
-  echo -e "\033[32m[OK] install docker registry certification\033[0m"
 fi
-echo "[Unit]
+docker_opts="$DOCKER_OPTS $insecure_docker_registry --graph $docker_graph_path"
+if command_exists systemctl ; then
+  docker_opts="DOCKER_OPTS=\"$docker_opts\""
+  echo "
+$docker_opts
+" > /etc/sysconfig/docker
+  echo "[Unit]
 Description=Docker Application Container Engine
 Documentation=https://docs.docker.com
 After=network.target docker.socket
@@ -515,12 +644,7 @@ Requires=docker.socket
 [Service]
 Type=notify
 EnvironmentFile=/etc/sysconfig/docker
-ExecStart=/usr/bin/docker daemon \$DOCKER_OPTS \\
-\$DOCKER_STORAGE_OPTIONS \\
-\$DOCKER_NETWORK_OPTIONS \\
-\$ADD_REGISTRY \\
-\$BLOCK_REGISTRY \\
-\$INSECURE_REGISTRY
+ExecStart=/usr/bin/docker daemon \$DOCKER_OPTS \$DOCKER_NETWORK_OPTIONS -H fd://
 
 MountFlags=slave
 LimitNOFILE=1048576
@@ -532,36 +656,49 @@ Delegate=yes
 [Install]
 WantedBy=multi-user.target
 " > /lib/systemd/system/docker.service
-if command_exists docker ; then
-  echo -e "\033[32m[OK] docker environment is ready\033[0m"
-else
-  echo -e "\033[31m[ERROR] docker environment is not ready\033[0m"
-  exit 1
+elif command_exists initctl ; then
+  docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=\${FLANNEL_IPMASQ} $docker_opts\""
+  echo ". /run/flannel/subnet.env
+$docker_opts
+" > /etc/default/docker
 fi
+echo -e "\033[32m[OK] Docker environment is ready\033[0m"
 
-# STEP 10: start flannel
-echo -e "\033[36m[INFO] STEP 10: Start Flannel...\033[0m"
-systemctl daemon-reload
-systemctl stop docker
-systemctl stop flanneld
-ip link delete docker0
-ip link delete flannel.1
-systemctl disable iptables-services firewalld
-systemctl stop iptables-services firewalld
-systemctl start flanneld
+# STEP 11: start flannel
+echo -e "\033[36m[INFO] STEP 11: Start Flannel...\033[0m"
+if command_exists systemctl ; then
+  systemctl daemon-reload
+  systemctl stop docker
+  systemctl stop flanneld
+  systemctl disable iptables-services firewalld
+  systemctl stop iptables-services firewalld
+  ip link delete docker0
+  ip link delete flannel.1
+  systemctl start flanneld
+elif command_exists initctl ; then
+  initctl stop docker
+  initctl stop flanneld
+  initctl stop iptables-services firewalld
+  ip link delete docker0
+  ip link delete flannel.1
+  initctl start flanneld
+fi
 sleep 5
-systemctl status -l flanneld
 
-# STEP 11: start docker
-echo -e "\033[36m[INFO] STEP 11: Start Docker...\033[0m"
-systemctl start docker
+# STEP 12: start docker
+echo -e "\033[36m[INFO] STEP 12: Start Docker...\033[0m"
+if command_exists systemctl ; then
+  systemctl start docker
+elif command_exists initctl ; then
+  initctl start docker
+fi
 sleep 8
-systemctl status -l docker
 
-# STEP 12: start kube-apiserver
-echo -e "\033[36m[INFO] STEP 12: Start kube-apiserver...\033[0m"
-systemctl stop kube-apiserver
-echo "# configure file for kube-apiserver
+# STEP 13: start kube-apiserver
+echo -e "\033[36m[INFO] STEP 13: Start kube-apiserver...\033[0m"
+if command_exists systemctl ; then
+  systemctl stop kube-apiserver
+  echo "# configure file for kube-apiserver
 
 # --etcd-servers
 ETCD_SERVERS='--etcd-servers=$etcd_servers'
@@ -571,11 +708,10 @@ SERVICE_CLUSTER_IP_RANGE='--service-cluster-ip-range=$service_cluster_ip_range'
 INSECURE_BIND_ADDRESS='--insecure-bind-address=$insecure_bind_address'
 # --insecure-port
 INSECURE_PORT='--insecure-port=$insecure_port'
-" > /etc/sysconfig/kube-apiserver
-echo "# other parameters
+# other parameters
 KUBE_APISERVER_OPTS='$KUBE_APISERVER_OPTS'
-" >> /etc/sysconfig/kube-apiserver
-echo "[Unit]
+" > /etc/sysconfig/kube-apiserver
+  echo "[Unit]
 Description=kube-apiserver
 
 [Service]
@@ -587,22 +723,66 @@ ExecStart=$K8S_INSTALL_PATH/current/kube-apiserver \$ETCD_SERVERS \\
           \$KUBE_APISERVER_OPTS
 Restart=always
 " > /lib/systemd/system/kube-apiserver.service
-systemctl daemon-reload
-systemctl start kube-apiserver
-sleep 8
-systemctl status -l kube-apiserver
+  systemctl daemon-reload
+  systemctl start kube-apiserver
+elif command_exists initctl ; then
+  initctl stop kube-apiserver
+  echo "ETCD_SERVERS='--etcd-servers=$etcd_servers'
+SERVICE_CLUSTER_IP_RANGE='--service-cluster-ip-range=$service_cluster_ip_range'
+INSECURE_BIND_ADDRESS='--insecure-bind-address=$insecure_bind_address'
+INSECURE_PORT='--insecure-port=$insecure_port'
+KUBE_APISERVER_OPTS='$KUBE_APISERVER_OPTS'
+" > /etc/default/kube-apiserver
+  echo "description \"kube-apiserver service\"
+author \"@domeos\"
 
-# STEP 13: start kube-controller-manager
-echo -e "\033[36m[INFO] STEP 13: Start kube-controller-manager...\033[0m"
-systemctl stop kube-controller
-echo "# configure file for kube-controller-manager
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+limit nofile 65536 65536
+
+pre-start script
+    KUBE_APISERVER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    if [ -f \$KUBE_APISERVER ]; then
+        exit 0
+    fi
+    exit 22
+end script
+
+script
+    KUBE_APISERVER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB\
+    ETCD_SERVERS=\"\"
+    SERVICE_CLUSTER_IP_RANGE=\"\"
+    INSECURE_BIND_ADDRESS=\"\"
+    INSECURE_PORT=\"\"
+    KUBE_APISERVER_OPTS=\"\"
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    exec \"\$KUBE_APISERVER\" \$ETCD_SERVERS \$SERVICE_CLUSTER_IP_RANGE \$INSECURE_BIND_ADDRESS \$INSECURE_PORT \$KUBE_APISERVER_OPTS
+end script
+" > /etc/init/kube-apiserver.conf
+  initctl start kube-apiserver
+fi
+sleep 10
+
+# STEP 14: start kube-controller-manager
+echo -e "\033[36m[INFO] STEP 14: Start kube-controller-manager...\033[0m"
+if command_exists systemctl ; then
+  systemctl stop kube-controller
+  echo "# configure file for kube-controller-manager
 
 # --master
 KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
 # other parameters
 KUBE_CONTROLLER_OPTS='$KUBE_CONTROLLER_MANAGER_OPTS'
 " > /etc/sysconfig/kube-controller
-echo "[Unit]
+  echo "[Unit]
 Description=kube-controller-manager
 After=kube-apiserver.service
 Wants=kube-apiserver.service
@@ -613,22 +793,60 @@ ExecStart=$K8S_INSTALL_PATH/current/kube-controller-manager \$KUBE_MASTER \\
           \$KUBE_CONTROLLER_OPTS
 Restart=always
 " > /lib/systemd/system/kube-controller.service
-systemctl daemon-reload
-systemctl start kube-controller
-sleep 5
-systemctl status -l kube-controller
+  systemctl daemon-reload
+  systemctl start kube-controller
+elif command_exists initctl ; then
+  initctl stop kube-controller
+  echo "KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
+KUBE_CONTROLLER_OPTS='$KUBE_CONTROLLER_MANAGER_OPTS'
+" > /etc/default/kube-controller
+  echo "description \"kube-controller service\"
+author \"@domeos\"
 
-# STEP 14: start kube-scheduler
-echo -e "\033[36m[INFO] STEP 14: Start kube-scheduler...\033[0m"
-systemctl stop kube-scheduler
-echo "# configure file for kube-scheduler
+start on started kube-apiserver
+stop on runlevel [!2345]
+
+respawn
+
+limit nofile 65536 65536
+
+pre-start script
+    KUBE_CONTROLLER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB-manager
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    if [ -f \$KUBE_CONTROLLER ]; then
+        exit 0
+    fi
+    exit 22
+end script
+
+script
+    KUBE_CONTROLLER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB-manager
+    KUBE_MASTER=\"\"
+    KUBE_CONTROLLER_OPTS=\"\"
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    exec \"\$KUBE_CONTROLLER\" \$KUBE_MASTER \$KUBE_CONTROLLER_OPTS
+end script
+" > /etc/init/kube-controller.conf
+fi
+  initctl start kube-controller
+sleep 5
+
+# STEP 15: start kube-scheduler
+echo -e "\033[36m[INFO] STEP 15: Start kube-scheduler...\033[0m"
+if command_exists systemctl ; then
+  systemctl stop kube-scheduler
+  echo "# configure file for kube-scheduler
 
 # --master
 KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
 # other parameters
 KUBE_SCHEDULER_OPTS='$KUBE_SCHEDULER_OPTS'
 " > /etc/sysconfig/kube-scheduler
-echo "[Unit]
+  echo "[Unit]
 Description=kube-scheduler
 After=kube-apiserver.service
 Wants=kube-apiserver.service
@@ -639,21 +857,59 @@ ExecStart=$K8S_INSTALL_PATH/current/kube-scheduler \$KUBE_MASTER \\
           \$KUBE_SCHEDULER_OPTS
 Restart=always
 " > /lib/systemd/system/kube-scheduler.service
-systemctl daemon-reload
-systemctl start kube-scheduler
-sleep 5
-systemctl status -l kube-scheduler
+  systemctl daemon-reload
+  systemctl start kube-scheduler
+elif command_exists initctl ; then
+  initctl stop kube-scheduler
+  echo "KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
+KUBE_SCHEDULER_OPTS='$KUBE_SCHEDULER_OPTS'
+" > /etc/default/kube-scheduler
+  echo "description \"kube-scheduler service\"
+author \"@domeos\"
 
-# STEP 15: start kube-proxy
-echo -e "\033[36m[INFO] STEP 15: Start kube-proxy...\033[0m"
-systemctl stop kube-proxy
-echo "# configure file for kube-proxy
+start on started kube-apiserver
+stop on runlevel [!2345]
+
+respawn
+
+limit nofile 65536 65536
+
+pre-start script
+    KUBE_SCHEDULER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    if [ -f \$KUBE_SCHEDULER ]; then
+        exit 0
+    fi
+    exit 22
+end script
+
+script
+    KUBE_SCHEDULER=$K8S_INSTALL_PATH/current/\$UPSTART_JOB\
+    KUBE_MASTER=\"\"
+    KUBE_SCHEDULER_OPTS=\"\"
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    exec \"\$KUBE_SCHEDULER\" \$KUBE_MASTER \$KUBE_SCHEDULER_OPTS
+end script
+" > /etc/init/kube-scheduler.conf
+  initctl start kube-scheduler
+fi
+sleep 5
+
+# STEP 16: start kube-proxy
+echo -e "\033[36m[INFO] STEP 16: Start kube-proxy...\033[0m"
+if command_exists systemctl ; then
+  systemctl stop kube-proxy
+  echo "# configure file for kube-proxy
 # --master
 KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
 # other parameters
 KUBE_PROXY_OPTS='$KUBE_PROXY_OPTS'
 " > /etc/sysconfig/kube-proxy
-echo "[Unit]
+  echo "[Unit]
 Description=kube-proxy
 
 [Service]
@@ -662,7 +918,44 @@ ExecStart=$K8S_INSTALL_PATH/current/kube-proxy \$KUBE_MASTER \\
           \$KUBE_PROXY_OPTS
 Restart=on-failure
 " > /lib/systemd/system/kube-proxy.service
-systemctl daemon-reload
-systemctl start kube-proxy
+  systemctl daemon-reload
+  systemctl start kube-proxy
+elif command_exists initctl ; then
+  initctl stop kube-proxy
+  echo "KUBE_MASTER='--master=http://$host_ip:$kube_apiserver_port'
+KUBE_PROXY_OPTS='$KUBE_PROXY_OPTS'
+" > /etc/default/kube-proxy
+  echo "description \"kube-proxy service\"
+author \"@domeos\"
+
+start on started kube-apiserver
+stop on runlevel [!2345]
+
+respawn
+
+limit nofile 65536 65536
+
+pre-start script
+    KUBE_PROXY=$K8S_INSTALL_PATH/current/\$UPSTART_JOB
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    if [ -f \$KUBE_PROXY ]; then
+        exit 0
+    fi
+    exit 22
+end script
+
+script
+    KUBE_PROXY=$K8S_INSTALL_PATH/current/\$UPSTART_JOB\
+    KUBE_MASTER=\"\"
+    KUBE_PROXY_OPTS=\"\"
+    if [ -f /etc/default/\$UPSTART_JOB ]; then
+        . /etc/default/\$UPSTART_JOB
+    fi
+    exec \"\$KUBE_PROXY\" \$KUBE_MASTER \$KUBE_PROXY_OPTS
+end script
+" > /etc/init/kube-proxy.conf
+  initctl start kube-proxy
+fi
 sleep 5
-systemctl status -l kube-proxy
