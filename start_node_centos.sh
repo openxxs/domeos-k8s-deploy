@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # start kubernetes node for DomeOS in centos server system
 # xiaoshengxu@sohu-inc.com
@@ -96,10 +96,10 @@ if [[ "$1" =~ "help" ]]; then
 fi
 
 # STEP 01: check linux kernel version
-echo -e "\033[36m[INFO] STEP 01: Check Linux kernel version...\033[0m"
+echo -e "\033[36m[INFO] STEP 01: Check linux kernel version...\033[0m"
 kernel_version=`uname -r`
-if [ -z $kernel_version ]; then
-  echo -e "\033[31m[ERROR] get kernel version error, kernel must be 3.10.0 at minimum\033[0m"
+if [ -z "$kernel_version" ]; then
+  echo -e "\033[31m[ERROR] Get kernel version error, kernel must be 3.10.0 at minimum\033[0m"
   exit 1
 fi
 kernel_parts_tmp=(${kernel_version//-/ })
@@ -321,7 +321,7 @@ elif [ $hostname_cnt -ge 64 ]; then
   echo -e "\033[31m[ERROR] node hostname is longer than 63 chars\033[0m"
   exit 1
 fi
-echo -e "\033[32m[OK] check node hostname\033[0m"
+echo -e "\033[32m[OK] Node hostname is legal\033[0m"
 
 # STEP 05: get iface for flannel
 echo -e "\033[36m[INFO] STEP 05: Get iface for Flannel...\033[0m"
@@ -333,6 +333,7 @@ else
   flannel_iface=${flannel_iface[0]}
   echo -e "\033[32m[OK] use flannel iface: $flannel_iface\033[0m"
 fi
+echo -e "\033[32m[OK] /etc/hosts has been updated\033[0m"
 
 # STEP 06: download and decompress installation package
 echo -e "\033[36m[INFO] STEP 06: Download and decompress installation package...\033[0m"
@@ -363,7 +364,7 @@ set +e
 echo -e "\033[32m[OK] Download and place required files\033[0m"
 
 # STEP 07: add hostname and IP address into hosts
-echo -e "\033[36m[INFO] STEP 07: Add /etc/hosts record\033[0m"
+echo -e "\033[36m[INFO] STEP 07: Add /etc/hosts record...\033[0m"
 exist_hosts=0
 while IFS='' read -r line || [[ -n "$line" ]]; do
   ip_tmp=$(echo $line | cut -f1 -d ' ')
@@ -378,6 +379,7 @@ done < /etc/hosts
 if [ $exist_hosts -eq 0 ]; then
   echo "$node_ip $node_hostname" >> /etc/hosts
 fi
+echo -e "\033[32m[OK] /etc/hosts has been updated\033[0m"
 
 # STEP 08: add DNS server into resolv.conf
 echo -e "\033[36m[INFO] STEP 08: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE\033[0m"
@@ -423,7 +425,7 @@ if command_exists flanneld && [ -e /usr/libexec/flannel/mk-docker-opts.sh ]; the
   echo -e "\033[36m[INFO] flanneld command already exists on this system.\033[0m"
   echo -e "\033[36m/etc/sysconfig/flanneld /usr/lib/systemd/system/docker.service.d/flannel.conf and /lib/systemd/system/flanneld.service files will be reset\033[0m"
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  echo -e "\033[36mWaitting for 10 seconds...\033[0m"
   sleep 10
 fi
   # check http:// prefix of etcd address
@@ -577,7 +579,7 @@ systemctl start docker
 sleep 8
 systemctl status -l docker
 
-# STEP 13: start kube-proxy
+# STEP 13: configure and start kube-proxy
 echo -e "\033[36m[INFO] STEP 13: Start kube-proxy...\033[0m"
 systemctl stop kube-proxy
 echo "# configure file for kube-proxy
@@ -616,7 +618,7 @@ ROOT_DIR='--root-dir=$k8s_data_dir'
 # --hostname-override
 HOSTNAME_OVERRIDE='--hostname-override=$node_hostname'
 # other parameters
-KUBELET_OPTS='$kubelet_opts'
+KUBELET_OPTS='$KUBELET_OPTS'
 " > /etc/sysconfig/kubelet
 echo "[Unit]
 Description=kubelet
@@ -659,7 +661,9 @@ if [ -n "$monitor_transfer" ]; then
 fi
 
 # STEP 16: patch labels for node
-echo -e "\033[36m[INFO] STEP 16: Patch labels for node $node_hostname\033[0m"
+echo -e "\033[36m[INFO] STEP 16: Patch labels for node $node_hostname...\033[0m"
+  # sleep for kubernetes node register
+sleep 3
 labels=($(echo $node_labels | sed 's/,/ /g'))
 for label in "${labels[@]}"
 do

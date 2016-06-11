@@ -60,7 +60,7 @@ Options:
   --kube-apiserver-port         port on which to serve kube-apiserver access for kube-proxy, kube-scheduler and kube-controller-manager (default 8080).
   --kubernetes-version          Kubernetes version (default $K8S_VERSION).
   --service-cluster-ip-range    a CIDR notation IP range from which to assign Kubernetes service cluster IPs. This must not overlap with any IP ranges assigned to nodes for pods (default 172.16.0.0/13).
-  --secure-docker-registry      docker secure registry communication address (default "").
+  --secure-docker-registry      docker secure registry communication address (default '').
 "
 }
 

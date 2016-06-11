@@ -12,15 +12,16 @@ K8S_INSTALL_PATH="/usr/sbin/domeos/k8s"
 FLANNEL_INSTALL_PATH="/usr/sbin/domeos/flannel"
 K8S_PACKAGE_URL_PREFIX="http://domeos-binpack.bjcnc.scs.sohucs.com/k8s/"
 FLANNEL_BIN_URL_PREFIX="http://domeos-binpack.bjcnc.scs.sohucs.com/flannel/"
-DOCKER_URL="https://get.docker.com/"
 RESOLV_FILE="/etc/resolv.conf"
 RESOLV_CONF_HEAD="/etc/resolvconf/resolv.conf.d/head"
 FLANNEL_PREFIX="/flannel/network"
 DOCKER_REGISTRY_CRT_PATH="/etc/docker/certs.d"
+DOCKER_LIST_FILE="/etc/apt/sources.list.d/docker.list"
+DOCKER_REPO_URL="https://apt.dockerproject.org/repo"
 DOCKER_OPTS="--log-level=warn"
 FLANNEL_OPTS=
 KUBE_APISERVER_OPTS=
-KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider="
+KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider=\"\""
 KUBE_SCHEDULER_OPTS=
 KUBE_PROXY_OPTS="--masquerade-all=true --proxy-mode=iptables"
 
@@ -54,7 +55,7 @@ Options:
   --kube-apiserver-port         port on which to serve kube-apiserver access for kube-proxy, kube-scheduler and kube-controller-manager (default 8080).
   --kubernetes-version          Kubernetes version (default $K8S_VERSION).
   --service-cluster-ip-range    a CIDR notation IP range from which to assign Kubernetes service cluster IPs. This must not overlap with any IP ranges assigned to nodes for pods (default 172.16.0.0/13).
-  --secure-docker-registry      docker secure registry communication address (default "").
+  --secure-docker-registry      docker secure registry communication address (default '').
 "
 }
 
@@ -68,6 +69,7 @@ This is a shell script for install, configure and start Kubernetes Master for Do
 Attention:
 1. This shell will try to install the latest docker if docker has not been installed. You can install docker by yourself before execute this shell. Docker version must be 1.8.2 at minimum, version 1.10.3 is recommanded.
 2. This shell will reset flannel and docker configure file.
+3. Use 'bash start_master_ubuntu.sh help' to get more information.
 
 Usage Example:
 1. Simple options, use default values:
@@ -83,7 +85,7 @@ if [[ "$1" =~ "help" ]] || [ -z "$1" ]; then
 fi
 
 # STEP 01: check linux kernel version
-echo -e "\033[36m[INFO] STEP 01: Check system kernel...\033[0m"
+echo -e "\033[36m[INFO] STEP 01: Check Linux kernel version...\033[0m"
 kernel_version=`uname -r`
 if [ -z "$kernel_version" ]; then
   echo -e "\033[31m[ERROR] get kernel version error, kernel must be 3.10.0 at minimum\033[0m"
@@ -165,7 +167,14 @@ if [ -z "$cluster_dns" ]; then
   echo -e "\033[36m[INFO] --cluster-dns is absent, default '172.16.40.1'\033[0m"
   cluster_dns="172.16.40.1"
 else
-  echo "--cluster-dns: $cluster_dns"
+  cluster_dns_check=`echo $cluster_dns | grep ':' | wc | awk '{print $3}'`
+  if [ $cluster_dns_check -gt 0 ]; then
+    echo -e "\033[33m[WARN] --cluster-dns $cluster_dns includes port, it is illegal\033[0m"
+    cluster_dns=`echo $cluster_dns | cut -f1 -d ':'`
+    echo -e "\033[36m[INFO] use '--cluster-dns $cluster_dns' instead, DNS port always be 53\033[0m"
+  else
+    echo "--cluster-dns: $cluster_dns"
+  fi
 fi
 if [ -z "$cluster_domain" ]; then
   echo -e "\033[36m[INFO] --cluster-domain is absent, default 'domeos.local'\033[0m"
@@ -279,7 +288,7 @@ echo -e "\033[36m[INFO] STEP 03: Check host IP...\033[0m"
 host_hostname=`hostname`
 current_path=$(pwd)
 host_ips=(`ip addr show | grep inet | grep -v inet6 | grep brd | awk '{print $2}' | cut -f1 -d '/'`)
-if [ "$host_ips" == "" ]; then
+if [ -z "$host_ips" ]; then
   echo -e "\033[31m[ERROR] get host ip address error\033[0m"
   exit 1
 fi
@@ -300,7 +309,7 @@ do
     break
   fi
 done
-if [ "$host_ip" == "" ]; then
+if [ -z "$host_ip" ]; then
   host_ip=${host_ips[0]}
 fi
 echo -e "\033[32m[OK] use host IP address: $host_ip\033[0m"
@@ -583,8 +592,6 @@ if command_exists docker; then
   fi
 else
   echo -e "\033[36m[INFO] STEP 09: Install and configure docker...\033[0m"
-  docker_list_file="/etc/apt/sources.list.d/docker.list"
-  docker_repo_url="https://apt.dockerproject.org/repo"
   apt-get update
   apt-get install -y apt-transport-https ca-certificates
   if [ "$ubuntu_release" == "14.04" ]||[ "$ubuntu_release" == "15.10" ]||[ "$ubuntu_release" == "16.04" ]; then
@@ -594,11 +601,11 @@ else
     apt-get install -y apparmor
   fi
   apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-  if [ -f "$docker_list_file" ]; then
-    rm -f $docker_list_file
+  if [ -f "$DOCKER_LIST_FILE" ]; then
+    rm -f $DOCKER_LIST_FILE
   fi
-  touch $docker_list_file
-  echo "deb $docker_repo_url ubuntu-$ubuntu_codename main" > $docker_list_file
+  touch $DOCKER_LIST_FILE
+  echo "deb $DOCKER_REPO_URL ubuntu-$ubuntu_codename main" > $DOCKER_LIST_FILE
   apt-get update
   apt-get purge lxc-docker
   apt-cache policy docker-engine
