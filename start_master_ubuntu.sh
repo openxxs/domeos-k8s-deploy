@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # install and start kubernetes master on Ubuntu 12.04, 14.04, 15.10 and 16.04 system
-# xiaoshengxu@sohu-inc.com
+# openxxs@gmail.com
 # http://domeos-script.bjctc.scs.sohucs.com/start_master_ubuntu.sh
 
 AVAILABLE_K8S_VERSION=("1.1.3" "1.1.7" "1.2.0" "1.2.4")
@@ -73,10 +73,10 @@ Attention:
 
 Usage Example:
 1. Simple options, use default values:
-sudo bash start_master_ubuntu.sh --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --insecure-docker-registry 10.11.150.98:5000
+sudo bash start_master_ubuntu.sh --etcd-servers http://0.0.0.0:4012,http://0.0.0.1:4012,http://0.0.0.2:4012 --insecure-docker-registry 0.0.0.0:5000
 
 2. Full options:
-sudo bash start_master_ubuntu.sh --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker --docker-registry-crt /opt/domeos/openxxs/k8s-1.1.7-flannel/registry.crt --etcd-servers http://10.11.150.99:4012,http://10.11.150.100:4012,http://10.11.150.101:4012 --flannel-network-ip-range 172.24.0.0/13 --flannel-subnet-len 22 --flannel-version 0.5.5 --insecure-bind-address 0.0.0.0 --insecure-port 8080 --insecure-docker-registry 10.11.150.78:5000 --kube-apiserver-port 8080 --kubernetes-version 1.2.0 --service-cluster-ip-range 172.16.0.0/13 --secure-docker-registry https://private-registry.sohucs.com
+sudo bash start_master_ubuntu.sh --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker --docker-registry-crt /opt/domeos/openxxs/k8s-1.1.7-flannel/registry.crt --etcd-servers http://0.0.0.0:4012,http://0.0.0.1:4012,http://0.0.0.2:4012 --flannel-network-ip-range 172.24.0.0/13 --flannel-subnet-len 22 --flannel-version 0.5.5 --insecure-bind-address 0.0.0.0 --insecure-port 8080 --insecure-docker-registry 0.0.0.0:5000 --kube-apiserver-port 8080 --kubernetes-version 1.2.0 --service-cluster-ip-range 172.16.0.0/13 --secure-docker-registry https://my-private.sohucs.com
 "
 
 if [[ "$1" =~ "help" ]] || [ -z "$1" ]; then

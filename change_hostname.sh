@@ -2,7 +2,7 @@
 
 # change hostname for centos
 # sh change_hostname.sh <new hostname>
-# xiaoshengxu@sohu-inc.com
+# openxxs@gmail.com
 # 2016-01-11
 # update 2016-04-21: info selected ip address when update /etc/hosts
 

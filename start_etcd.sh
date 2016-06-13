@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # install etcd cluster for Centos 7, Ubuntu 12.04, Ubuntu 14.04, Ubuntu 15.10 and Ubuntu 16.04
-# xiaoshengxu@sohu-inc.com
+# openxxs@gmail.com
 # 2016-03-01
 # http://domeos-script.bjctc.scs.sohucs.com/start_etcd.sh
 
@@ -35,7 +35,7 @@ Available Commands:
   help   show the help information about start_etcd.sh.
 
 Options:
-  --cluster-nodes    (REQUIRED) a comma-delimited list of node ips in the cluster, includes current node ip (e.g. 192.168.123.110,192.168.123.111,192.168.123.112)).
+  --cluster-nodes    (REQUIRED) a comma-delimited list of node ips in the cluster, includes current node ip (e.g. 0.0.0.1,0.0.0.2,0.0.0.3).
   --client-port      port to listen on for client traffic (default $CLIENT_PORT).
   --data-path        path to the data directory (default /var/lib/etcd).
   --etcd-version     etcd version (default $ETCD_VERSION).
@@ -55,7 +55,7 @@ Attention:
 2) Please keep the value of --cluster-nodes constant for all ETCD nodes.
 
 Usage Example:
-  sudo bash start_etcd.sh --cluster-nodes 192.168.123.110,192.168.123.111,192.168.123.112 --node-ip 192.168.123.110
+  sudo bash start_etcd.sh --cluster-nodes 0.0.0.1,0.0.0.2,0.0.0.3 --node-ip 0.0.0.1
 "
 if [[ "$1" =~ "help" ]] || [ -z "$1" ]; then
   help

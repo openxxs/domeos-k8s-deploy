@@ -43,7 +43,7 @@ spec:
           command:
             - "/skydns"
           args:
-            - "--machines=http://10.11.151.101:4012"
+            - "--machines=http://0.0.0.1:4012"
             - "--domain=domeos.local"
             - "--addr=0.0.0.0:53"
             - "--nameservers=8.8.8.8:53"
@@ -79,6 +79,6 @@ spec:
           command:
             - "/kube2sky"
           args:
-            - "--etcd-server=http://10.11.151.101:4012"
+            - "--etcd-server=http://0.0.0.1:4012"
             - "--domain=domeos.local"
-            - "--kube_master_url=http://10.11.151.101:8080"
+            - "--kube_master_url=http://0.0.0.1:8080"

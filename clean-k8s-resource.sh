@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # clean all kubernetes resources in all namespace
-# xiaoshengxu@sohu-inc.com
+# openxxs@gmail.com
 # 2016-04-22
 
 # Usage:   sudo sh clean-k8s-resource.sh <kube_apiserver_address>
-# Example: sudo sh clean-k8s-resource.sh 10.11.151.101:8080
+# Example: sudo sh clean-k8s-resource.sh 0.0.0.1:8080
 
 # STEP 01: set kubectl command
 if [ "$1" == "" ]; then

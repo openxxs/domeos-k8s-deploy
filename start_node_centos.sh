@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # start kubernetes node for DomeOS in centos server system
-# xiaoshengxu@sohu-inc.com
+# openxxs@gmail.com
 # 2016-01-11
 # 2016-03-30 update
 # update 2016-04-21: 1) add cluster DNS nameserver and search into top of resolv.conf;
@@ -87,7 +87,7 @@ Attention:
 3. Use 'bash start_node_centos.sh help' to get more information.
 
 Usage Example:
-sudo bash start_node_centos.sh --api-server http://10.16.52.200:8080 --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker-graph --docker-log-level warn --domeos-server 10.11.158.76:8080 --etcd-server http://10.16.52.199:4012,http://10.16.52.200:4012,http://10.16.52.201:4012 --flannel-version 0.5.5 --heartbeat-addr 10.16.52.199:6030 --hostname-override tc-158-94 --k8s-data-dir /opt/domeos/openxxs/k8s-data --kubernetes-version 1.2.0 --monitor-transfer 10.16.52.198:8433,10.16.52.199:8433 --node-labels TESTENV=HOSTENVTYPE,PRODENV=HOSTENVTYPE --registry-type http --registry-arg 10.11.150.76:5000
+sudo bash start_node_centos.sh --api-server http://0.0.0.0:8080 --cluster-dns 172.16.40.1 --cluster-domain domeos.local --docker-graph-path /opt/domeos/openxxs/docker-graph --docker-log-level warn --domeos-server 0.0.0.0:8080 --etcd-server http://0.0.0.0:4012,http://0.0.0.1:4012,http://0.0.0.2:4012 --flannel-version 0.5.5 --heartbeat-addr 0.0.0.0:6030 --hostname-override my-host-01 --k8s-data-dir /opt/domeos/openxxs/k8s-data --kubernetes-version 1.2.0 --monitor-transfer 0.0.0.0:8433,0.0.0.1:8433 --node-labels TESTENV=HOSTENVTYPE,PRODENV=HOSTENVTYPE --registry-type http --registry-arg 0.0.0.0:5000
 "
 
 if [[ "$1" =~ "help" ]]; then
