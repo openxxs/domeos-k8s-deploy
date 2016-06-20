@@ -3,6 +3,7 @@
 # install and start kubernetes master on Ubuntu 12.04, 14.04, 15.10 and 16.04 system
 # openxxs@gmail.com
 # http://domeos-script.bjctc.scs.sohucs.com/start_master_ubuntu.sh
+# update 2016-06-17: fix flannel and docker ip-masq bug; kube-proxy cloud-provider bug
 
 AVAILABLE_K8S_VERSION=("1.1.3" "1.1.7" "1.2.0" "1.2.4")
 AVAILABLE_FLANNEL_VERSION=("0.5.5")
@@ -21,7 +22,7 @@ DOCKER_REPO_URL="https://apt.dockerproject.org/repo"
 DOCKER_OPTS="--log-level=warn"
 FLANNEL_OPTS=
 KUBE_APISERVER_OPTS=
-KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider=\"\""
+KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider="
 KUBE_SCHEDULER_OPTS=
 KUBE_PROXY_OPTS="--masquerade-all=true --proxy-mode=iptables"
 
@@ -359,7 +360,7 @@ fi
 # STEP 06: add DNS server into resolv.conf and resolv.conf.d/head
 echo -e "\033[36m[INFO] STEP 06: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE and $RESOLV_CONF_HEAD\033[0m"
 echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+echo -e "\033[36mwaiting for 10 seconds...\033[0m"
 sleep 10
 cluster_dns_search="default.svc.$cluster_domain svc.$cluster_domain $cluster_domain"
 host_self_dns=
@@ -456,7 +457,7 @@ if command_exists flanneld && [ -e /usr/libexec/flannel/mk-docker-opts.sh ]; the
     exit 1
   fi
   echo -e "\033[36m[INFO]You may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36m[INFO]waitting for 10 seconds...\033[0m"
+  echo -e "\033[36m[INFO]waiting for 10 seconds...\033[0m"
   sleep 10
 fi
   # check http:// prefix of etcd address
@@ -563,7 +564,7 @@ if command_exists docker; then
     echo -e "\033[36m/etc/default/docker will be reset\033[0m"
   fi
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  echo -e "\033[36mwaiting for 10 seconds...\033[0m"
   sleep 10
   docker_version=(`docker version | grep Version | awk '{print $2}'`)
     if [ -z "$docker_version" ]; then
@@ -664,7 +665,17 @@ Delegate=yes
 WantedBy=multi-user.target
 " > /lib/systemd/system/docker.service
 elif command_exists initctl ; then
-  docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=\${FLANNEL_IPMASQ} $docker_opts\""
+  if [ -f "/run/flannel/subnet.env" ]; then
+    source /run/flannel/subnet.env
+    if [ "$FLANNEL_IPMASQ" = true ]; then
+      docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=false $docker_opts\""
+    else
+      docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=true $docker_opts\""
+    fi
+  else
+    echo -e "\033[31m[ERROR] Docker loads flannel env error \033[0m"
+    exit 1
+  fi
   echo ". /run/flannel/subnet.env
 $docker_opts
 " > /etc/default/docker

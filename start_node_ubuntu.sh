@@ -6,6 +6,9 @@
 # update 2016-06-01: add heartbeat parameter
 # update 2016-06-06: add kubernetes and flannel version
 # update 2016-06-08: add help info; remove --start-agent
+# update 2016-06-15: fix heartbeat bug
+# update 2016-06-16: fix kube-proxy bug; hostname should not include capital letters
+# update 2016-06-17: fix flannel and docker ip-masq bug; kube-proxy cloud-provider bug
 
 AVAILABLE_K8S_VERSION=("1.1.3" "1.1.7" "1.2.0" "1.2.4")
 AVAILABLE_K8S_FLANNEL_VERSION=("0.5.5")
@@ -234,7 +237,7 @@ else
     exit 1
   fi
 fi
-if [ -z "$monitor_transfer" ]; then
+if [ -z "$monitor_transfer" ] && [ -n "$heartbeat_addr" ] ; then
   echo -e "\033[31m[ERROR] --monitor-transfer is absent, --monitor-transfer is required when --heartbeat-addr is set.\033[0m"
   exit 1
 else
@@ -318,9 +321,9 @@ echo -e "\033[32m[OK] use node IP address: $node_ip\033[0m"
 # STEP 04: check hostname (DNS roles)
 echo -e "\033[36m[INFO] STEP 04: Check node hostname...\033[0m"
 node_hostname=$hostname_override
-hostname_cnt=`echo $node_hostname | grep '^[0-9a-zA-Z-]*$' | wc | awk '{print $3}'`
+hostname_cnt=`echo $node_hostname | grep '^[0-9a-z-]*$' | wc | awk '{print $3}'`
 if [ $hostname_cnt -le 0 ]; then
-  echo -e "\033[31m[ERROR] node hostname used for DomeOS is illegal (^[0-9a-zA-Z-]*$), you can use change_hostname.sh(http://domeos-script.bjctc.scs.sohucs.com/change_hostname.sh) to assign a new hostname for node, or set --hostname-override parameter for start_node_ubuntu.sh\033[0m"
+  echo -e "\033[31m[ERROR] node hostname used for DomeOS is illegal (^[0-9a-z-]*$), you can use change_hostname.sh(http://domeos-script.bjctc.scs.sohucs.com/change_hostname.sh) to assign a new hostname for node, or set --hostname-override parameter for start_node_ubuntu.sh\033[0m"
   exit 1
 elif [ $hostname_cnt -ge 64 ]; then
     echo -e "\033[31m[ERROR] node hostname is longer than 63 chars\033[0m"
@@ -384,7 +387,7 @@ echo -e "\033[32m[OK] /etc/hosts has been updated\033[0m"
 # STEP 08: add DNS server into resolv.conf and resolv.conf.d/head
 echo -e "\033[36m[INFO] STEP 08: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE and $RESOLV_CONF_HEAD\033[0m"
 echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+echo -e "\033[36mwaiting for 10 seconds...\033[0m"
 sleep 10
 cluster_dns_search="default.svc.$cluster_domain svc.$cluster_domain $cluster_domain"
 host_self_dns=
@@ -570,7 +573,7 @@ if command_exists docker ; then
     echo -e "\033[36m/etc/default/docker will be reset\033[0m"
   fi
   echo -e "\033[36m[You may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36m[waitting for 10 seconds...\033[0m"
+  echo -e "\033[36m[waiting for 10 seconds...\033[0m"
   sleep 10
   docker_version=(`docker version | grep Version | awk '{print $2}'`)
     if [ -z "$docker_version" ]; then
@@ -682,7 +685,17 @@ Delegate=yes
 WantedBy=multi-user.target
 " > /lib/systemd/system/docker.service
 elif command_exists initctl ; then
-  docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=\${FLANNEL_IPMASQ} $docker_opts\""
+  if [ -f "/run/flannel/subnet.env" ]; then
+    source /run/flannel/subnet.env
+    if [ "$FLANNEL_IPMASQ" = true ]; then
+      docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=false $docker_opts\""
+    else
+      docker_opts="DOCKER_OPTS=\"--bip=\${FLANNEL_SUBNET} --mtu=\${FLANNEL_MTU} --ip-masq=true $docker_opts\""
+    fi
+  else
+    echo -e "\033[31m[ERROR] Docker loads flannel env error \033[0m"
+    exit 1
+  fi
   echo ". /run/flannel/subnet.env
 $docker_opts
 " > /etc/default/docker
@@ -743,7 +756,7 @@ Restart=on-failure
 elif command_exists initctl ; then
   initctl stop kube-proxy
   echo "KUBE_MASTER='--master=$api_server'
-KUBE_PROXY_OPTS='$kube_proxy_opts'
+KUBE_PROXY_OPTS='$KUBE_PROXY_OPTS'
 " > /etc/default/kube-proxy
   echo "description \"Kube-Proxy service\"
 author \"@domeos\"
@@ -757,7 +770,7 @@ respawn
 limit nofile 65536 65536
 
 pre-start script
-	KUBE_PROXY=K8S_INSTALL_PATH/current/\$UPSTART_JOB
+	KUBE_PROXY=$K8S_INSTALL_PATH/current/\$UPSTART_JOB
 	if [ -f /etc/default/\$UPSTART_JOB ]; then
 		. /etc/default/\$UPSTART_JOB
 	fi
@@ -769,7 +782,7 @@ end script
 
 script
 	# modify these in /etc/default/\$UPSTART_JOB (/etc/default/kube-proxy)
-	KUBE_PROXY=K8S_INSTALL_PATH/current/\$UPSTART_JOB
+	KUBE_PROXY=$K8S_INSTALL_PATH/current/\$UPSTART_JOB
 	KUBE_MASTER=\"\"
 	KUBE_PROXY_OPTS=\"\"
 	if [ -f /etc/default/\$UPSTART_JOB ]; then

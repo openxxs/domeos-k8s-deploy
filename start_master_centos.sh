@@ -26,7 +26,7 @@ DOCKER_REGISTRY_CRT_PATH="/etc/docker/certs.d"
 DOCKER_OPTS="--log-level=warn"
 FLANNEL_OPTS=
 KUBE_APISERVER_OPTS=
-KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider=\"\""
+KUBE_CONTROLLER_MANAGER_OPTS="--cloud-provider="
 KUBE_SCHEDULER_OPTS=
 KUBE_PROXY_OPTS="--masquerade-all=true --proxy-mode=iptables"
 
@@ -348,7 +348,7 @@ fi
 # STEP 06: add DNS server into resolv.conf 
 echo -e "\033[36m[INFO] STEP 06: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE\033[0m"
 echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+echo -e "\033[36mwaiting for 10 seconds...\033[0m"
 sleep 10
 cluster_dns_search="default.svc.$cluster_domain svc.$cluster_domain $cluster_domain"
 host_self_dns=
@@ -412,7 +412,7 @@ if command_exists flanneld && [ -e /usr/libexec/flannel/mk-docker-opts.sh ]; the
   echo -e "\033[36m[INFO] flanneld command already exists on this system.\033[0m"
   echo -e "\033[36m/etc/sysconfig/flanneld /usr/lib/systemd/system/docker.service.d/flannel.conf and /lib/systemd/system/flanneld.service files will be reset\033[0m"
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  echo -e "\033[36mwaiting for 10 seconds...\033[0m"
   sleep 10
 fi
   # check http:// prefix of etcd address
@@ -473,7 +473,7 @@ if command_exists docker; then
   echo -e "\033[36m[INFO] STEP 09: docker command alrealy exists on this system.\033[0m"
   echo -e "\033[36m/etc/sysconfig/docker and /lib/systemd/system/docker.service files will be reset.\033[0m"
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  echo -e "\033[36mwaiting for 10 seconds...\033[0m"
   sleep 10
 else
   #yum install -y docker-engine-selinux-1.10.2-1.el7.centos.noarch.rpm

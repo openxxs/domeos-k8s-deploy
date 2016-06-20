@@ -19,6 +19,8 @@
 # update 2016-05-29: fix hostname-override bug
 # update 2016-06-06: add kubernetes and flannel version
 # update 2016-06-07: add help info; remove --start-agent
+# update 2016-06-15: fix heartbeat bug
+# update 2016-06-16: hostname can not includes capital letters
 
 AVAILABLE_K8S_VERSION=("1.1.3" "1.1.7" "1.2.0" "1.2.4")
 AVAILABLE_K8S_FLANNEL_VERSION=("0.5.5")
@@ -229,7 +231,7 @@ else
     exit 1
   fi
 fi
-if [ -z "$monitor_transfer" ]; then
+if [ -z "$monitor_transfer" ] && [ -n "$heartbeat_addr" ] ; then
   echo -e "\033[31m[ERROR] --monitor-transfer is absent, --monitor-transfer is required when --heartbeat-addr is set.\033[0m"
   exit 1
 else
@@ -313,9 +315,9 @@ echo -e "\033[32m[OK] use node IP address: $node_ip\033[0m"
 # STEP 04: check hostname (DNS roles)
 echo -e "\033[36m[INFO] STEP 04: Check node hostname...\033[0m"
 node_hostname=$hostname_override
-hostname_cnt=`echo $node_hostname | grep '^[0-9a-zA-Z-]*$' | wc | awk '{print $3}'`
+hostname_cnt=`echo $node_hostname | grep '^[0-9a-z-]*$' | wc | awk '{print $3}'`
 if [ $hostname_cnt -le 0 ]; then
-  echo -e "\033[31m[ERROR] node hostname used for DomeOS is illegal (^[0-9a-zA-Z-]*$), you can use change_hostname.sh(http://domeos-script.bjctc.scs.sohucs.com/change_hostname.sh) to assign a new hostname for node, or set --hostname-override parameter for start_node_centos.sh\033[0m"
+  echo -e "\033[31m[ERROR] node hostname used for DomeOS is illegal (^[0-9a-z-]*$), you can use change_hostname.sh(http://domeos-script.bjctc.scs.sohucs.com/change_hostname.sh) to assign a new hostname for node, or set --hostname-override parameter for start_node_centos.sh\033[0m"
   exit 1
 elif [ $hostname_cnt -ge 64 ]; then
   echo -e "\033[31m[ERROR] node hostname is longer than 63 chars\033[0m"
@@ -384,7 +386,7 @@ echo -e "\033[32m[OK] /etc/hosts has been updated\033[0m"
 # STEP 08: add DNS server into resolv.conf
 echo -e "\033[36m[INFO] STEP 08: Cluster DNS nameserver and search will be added into top of $RESOLV_FILE\033[0m"
 echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+echo -e "\033[36mwaiting for 10 seconds...\033[0m"
 sleep 10
 cluster_dns_search="default.svc.$cluster_domain svc.$cluster_domain $cluster_domain"
 host_self_dns=
@@ -486,7 +488,7 @@ if command_exists docker ; then
   echo -e "\033[36m[INFO] docker command already exists on this system.\033[0m"
   echo -e "\033[36m/etc/sysconfig/docker and /lib/systemd/system/docker.service files will be reset.\033[0m"
   echo -e "\033[36mYou may press Ctrl+C now to abort this script.\033[0m"
-  echo -e "\033[36mwaitting for 10 seconds...\033[0m"
+  echo -e "\033[36mwaiting for 10 seconds...\033[0m"
   sleep 10
 else
   #yum install -y docker-engine-selinux-1.10.2-1.el7.centos.noarch.rpm
